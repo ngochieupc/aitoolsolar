@@ -1,0 +1,164 @@
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=Lexend:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Lexend", sans-serif;
+}
+
+:root {
+  --red: #d32f2f;
+  --red-dark: #b71c1c;
+  --red-light: #ffebee;
+  --green: #059669;
+  --green-mid: #047857;
+  --green-light: #ecfdf5;
+  --vity-green: #10b981;
+  --gold: #f9a825;
+  --gold-light: #fff8e1;
+  --blue: #1565c0;
+  --blue-light: #e3f2fd;
+  --gray-50: #fafafa;
+  --gray-100: #f5f5f5;
+  --gray-200: #eeeeee;
+  --gray-300: #e0e0e0;
+  --gray-500: #757575;
+  --gray-700: #424242;
+  --gray-900: #1a1a1a;
+}
+
+body {
+  background-color: var(--gray-50);
+  color: var(--gray-900);
+}
+
+.card {
+  @apply bg-white border-2 border-slate-100 rounded-2xl shadow-xl shadow-slate-200/50 overflow-hidden mb-6 transition-all duration-300 hover:shadow-2xl hover:shadow-emerald-500/5;
+}
+
+.card-head {
+  @apply px-5 py-4 border-b-2 border-slate-50 flex items-center gap-3 bg-white;
+}
+
+.card-head h3 {
+  @apply font-display text-[13px] font-semibold text-[--gray-900];
+}
+
+.card-body {
+  @apply p-4;
+}
+
+.fg {
+  @apply flex flex-col gap-1 mb-3;
+}
+
+.fg label {
+  @apply text-[12px] font-medium text-[--gray-700] flex items-center gap-1 flex-wrap;
+}
+
+.fg input, .fg select, .fg textarea {
+  @apply px-3 py-2.5 border-2 border-slate-200 rounded-xl text-[13px] text-slate-900 bg-white outline-none transition-all w-full shadow-sm;
+}
+
+.fg input:focus, .fg select:focus, .fg textarea:focus {
+  @apply border-[--vity-green] ring-4 ring-[--vity-green]/10 shadow-md;
+}
+
+.editable-calc {
+  @apply bg-white border-[--gray-300] focus:border-[--blue] focus:ring-[--blue]/10;
+  border-color: var(--gray-300) !important;
+}
+
+.rcard {
+  @apply rounded-lg p-3 border border-transparent;
+}
+
+.rcard.bl { @apply bg-[--blue-light] border-blue-200; }
+.rcard.gr { @apply bg-[--green-light] border-green-200; }
+.rcard.or { @apply bg-orange-50 border-orange-200; }
+
+.rcard-val {
+  @apply text-lg font-bold font-display text-[--gray-900] leading-tight;
+}
+
+.btn {
+  @apply inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-bold cursor-pointer transition-all duration-300 shadow-sm hover:shadow-md active:scale-95 border-none;
+}
+
+.btn-red { @apply bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800; }
+.btn-outline { @apply bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300; }
+.btn-green { @apply bg-gradient-to-r from-emerald-600 to-emerald-700 text-white hover:from-emerald-700 hover:to-emerald-800; }
+.btn-blue { @apply bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800; }
+
+.toolbar-glass {
+  @apply bg-white/80 backdrop-blur-md border border-slate-200 p-2 rounded-2xl flex flex-wrap gap-2 mb-6 sticky top-20 z-30 shadow-lg shadow-slate-200/50;
+}
+
+.demand-badge {
+  @apply inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider;
+}
+
+.input-focus-ring {
+  @apply focus:ring-4 focus:ring-red-500/10 focus:border-red-500 transition-all duration-200;
+}
+
+.tip { @apply relative inline-flex items-center; }
+.tip-icon { @apply w-3.5 h-3.5 rounded-full bg-gray-400 text-white text-[9px] font-bold flex items-center justify-center cursor-help not-italic; }
+.tip-box { @apply hidden absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-800 text-slate-100 text-[11px] p-2 rounded-md z-50 pointer-events-none w-48 font-normal text-left shadow-lg; }
+.tip:hover .tip-box { @apply block; }
+
+.pt-btn { @apply flex-1 py-2 border-2 border-slate-200 rounded-xl bg-white text-[11.5px] cursor-pointer font-bold transition-all shadow-sm hover:border-slate-300; }
+.pt-btn.active { @apply bg-gradient-to-r from-emerald-500 to-emerald-600 border-emerald-500 text-white shadow-emerald-200 shadow-lg; }
+
+.hv-table { @apply w-full border-collapse; }
+.hv-table tr { @apply border-b border-[--gray-200]; }
+.hv-table tr:last-child { @apply border-none bg-[--green-light]; }
+.hv-table td { @apply py-1.5 px-2 text-[12px]; }
+.hv-table td:last-child { @apply text-right font-semibold text-[--green-mid]; }
+
+/* Floating contact sidebar */
+.fc-container { @apply fixed right-4 bottom-[100px] z-[9999] flex flex-col items-center gap-3 transition-all duration-500 pointer-events-none opacity-0 translate-x-20; }
+.fc-container.fc-show { @apply opacity-100 translate-x-0 pointer-events-auto; }
+.fc-container.fc-hidden { @apply translate-x-12 opacity-50; }
+
+.fc-btn-circle { @apply w-12 h-12 rounded-full flex items-center justify-center cursor-pointer shadow-xl transition-all duration-300 hover:scale-110 active:scale-95 border-none outline-none; }
+
+.fc-msg-circle { background: linear-gradient(135deg, #00b2ff, #0066ff); color: white; }
+.fc-zalo-circle { background: #0068ff; color: white; }
+.fc-phone-circle { background: #25d366; color: white; }
+.fc-fb-circle { background: #1877f2; color: white; }
+
+.fc-drag-handle { @apply absolute -left-6 top-0 bottom-0 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing; }
+.fc-drag-indicator { @apply w-1.5 h-12 bg-slate-400/30 rounded-full; }
+
+/* AI Chatbot */
+.btt-btn { @apply fixed right-3.5 bottom-[18px] z-[9999] w-11 h-11 rounded-full bg-emerald-600 text-white border-none cursor-pointer flex items-center justify-center shadow-lg opacity-0 translate-y-5 scale-75 transition-all duration-300 pointer-events-none; }
+.btt-btn.btt-show { @apply opacity-100 translate-y-0 scale-100 pointer-events-auto; }
+.btt-btn:hover { @apply bg-emerald-700 -translate-y-0.5 scale-110; }
+
+/* AI Chatbot */
+.ai-chat-btn { @apply fixed left-4 bottom-4 z-[9999] w-14 h-14 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-2xl cursor-pointer transition-all hover:scale-110 hover:bg-emerald-700 animate-bounce; animation-duration: 3s; }
+.ai-chat-window { @apply fixed left-4 bottom-20 z-[9999] w-[calc(100%-32px)] sm:w-80 h-[450px] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden transition-all duration-300 origin-bottom-left; }
+.ai-chat-header { @apply bg-emerald-600 p-4 text-white flex items-center justify-between; }
+.ai-chat-body { @apply flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50; }
+.ai-chat-footer { @apply p-3 border-t border-slate-100 bg-white flex gap-2; }
+.ai-msg { @apply max-w-[85%] p-3 rounded-2xl text-[13px] leading-relaxed; }
+.ai-msg-user { @apply self-end bg-emerald-600 text-white rounded-tr-none; }
+.ai-msg-bot { @apply self-start bg-white border border-slate-200 text-slate-800 rounded-tl-none shadow-sm; }
+
+/* Visitor counter */
+.vc-bar { @apply bg-[#1a1a1a] text-[#9e9e9e] text-center py-2.5 px-4 text-[10px] border-t border-[#2a2a2a] leading-relaxed; }
+.vc-bar span { @apply text-[#ef5350] font-bold; }
+.vc-online::before { content: ''; @apply inline-block w-1.5 h-1.5 bg-[#4caf50] rounded-full mr-1.5; animation: pulse-dot 1.5s infinite; }
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* Video Container */
+.video-container {
+  @apply relative pb-[56.25%] h-0 overflow-hidden rounded-xl shadow-lg border-2 border-slate-100;
+}
+.video-container iframe {
+  @apply absolute top-0 left-0 w-full h-full border-0;
+}
+.ptab th { @apply bg-[--gray-100] font-semibold p-1.5 text-left border-b border-[--gray-200] text-[10px]; }
+.ptab td { @apply p-1.5 border-b border-[--gray-200]; }
+.ptab tr:last-child td { @apply border-none; }

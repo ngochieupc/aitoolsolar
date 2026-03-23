@@ -1,0 +1,5 @@
+{
+  "name": "Vity Solar - Công cụ tính toán điện mặt trời",
+  "description": "Ứng dụng tính toán hiệu suất, sản lượng và phân tích tài chính cho hệ thống điện mặt trời chuyên nghiệp.",
+  "requestFramePermissions": ["geolocation"]
+}
