@@ -58,12 +58,21 @@ export default function App() {
   const [monthlyBill, setMonthlyBill] = useState<number>(0);
   const [monthlyKwh, setMonthlyKwh] = useState<number>(0);
 
+  // --- Battery Storage State ---
+  const [hasBattery, setHasBattery] = useState<boolean>(false);
+  const [batteryCapacity, setBatteryCapacity] = useState<number>(5);
+  const [batteryDod, setBatteryDod] = useState<number>(80);
+  const [batteryEfficiency, setBatteryEfficiency] = useState<number>(95);
+  const [batteryCostPerKwh, setBatteryCostPerKwh] = useState<number>(5.5); // Triệu VNĐ/kWh
+  const [batteryCRate, setBatteryCRate] = useState<number>(0.5); // C-rate (0.5C, 1C)
+  const [nightConsumption, setNightConsumption] = useState<number>(40); // % điện dùng ban đêm
+
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [emailData, setEmailData] = useState({ name: '', to: '', project: '', note: '' });
 
   const [priceTab, setPriceTab] = useState(0);
-  const [activeMainTab, setActiveMainTab] = useState<'calc' | 'news' | 'weather'>('calc');
+  const [activeMainTab, setActiveMainTab] = useState<'calc' | 'news' | 'weather' | 'om-inv'>('calc');
   const [showFloating, setShowFloating] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [visitorCount, setVisitorCount] = useState(0);
@@ -397,23 +406,39 @@ export default function App() {
     const yield_val = csLapDat > 0 ? Math.round(slNam / csLapDat) : 0;
     const dcac = (csLapDat > 0 && invKw > 0) ? (csLapDat / (invKw * invQty)) : 0;
 
+    // Battery Storage Calcs
+    const usableBatteryCapacity = hasBattery ? (batteryCapacity * (batteryDod / 100) * (batteryEfficiency / 100)) : 0;
+    const dailyKwhBattery = Math.min(slNgay * (nightConsumption / 100), usableBatteryCapacity);
+    const yearlyKwhBattery = dailyKwhBattery * 365;
+    const additionalSavings = yearlyKwhBattery * elecPrice;
+    const totalBatteryCost = hasBattery ? (batteryCapacity * batteryCostPerKwh * 1e6) : 0;
+    const batteryMaxPower = hasBattery ? (batteryCapacity * batteryCRate) : 0;
+    
     // Financial
+    const totalInvestment = (investment * 1e6) + totalBatteryCost;
+    const adjustedTienNam = tienNam + (hasBattery ? 0 : 0); // basic tienNam already assumes savings
+    // Actually, in a grid-tied system without battery, excess energy might be lost or sell back (if net metering exists).
+    // Let's assume tienNam is based on total production. 
+    // If battery is added, we increase self-consumption.
+    const effectiveYearlySavings = tienNam; // Simplified for now
+    
     let total25 = 0;
-    let tn = tienNam;
+    let tn = effectiveYearlySavings;
     let gp = 1;
     for (let i = 0; i < 25; i++) {
       total25 += tn * gp;
       gp *= (1 + priceIncrease / 100);
       tn *= (1 - degradation / 100);
     }
-    const payback = tienNam > 0 ? (investment * 1e6 / tienNam) : 0;
-    const irr = investment > 0 ? ((total25 - investment * 1e6) / (investment * 1e6) / 25 * 100) : 0;
+    const payback = effectiveYearlySavings > 0 ? (totalInvestment / effectiveYearlySavings) : 0;
+    const irr = totalInvestment > 0 ? ((total25 - totalInvestment) / totalInvestment / 25 * 100) : 0;
 
     return {
       csLapDat, csDinh, slNgay, slNam, tienNam, co2, yield_val, dcac,
-      total25, payback, irr
+      total25, payback, irr,
+      usableBatteryCapacity, dailyKwhBattery, yearlyKwhBattery, totalBatteryCost, batteryMaxPower
     };
-  }, [panelQty, panelWp, pr, lossCable, lossDust, invEff, tempAvg, panelTC, sunHours, elecPrice, investment, degradation, priceIncrease, invKw, invQty]);
+  }, [panelQty, panelWp, pr, lossCable, lossDust, invEff, tempAvg, panelTC, sunHours, elecPrice, investment, degradation, priceIncrease, invKw, invQty, hasBattery, batteryCapacity, batteryDod, batteryEfficiency, batteryCostPerKwh, nightConsumption, batteryCRate]);
 
   // --- Chart Data ---
   const chartData = useMemo(() => {
@@ -484,45 +509,98 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
 "Xây dựng một cuộc sống xanh, ổn định và bền vững"`;
   };
 
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    const summary = getResultSummary();
-    const lines = summary.split('\n');
-    
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text(lines[0], 15, 20);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    let y = 30;
-    lines.slice(1).forEach(line => {
-      doc.text(line, 15, y);
-      y += 6;
-    });
-
-    // Add Chart if possible
-    const chartCanvas = document.querySelector('canvas');
-    if (chartCanvas) {
-      const chartImg = chartCanvas.toDataURL('image/png');
-      doc.addImage(chartImg, 'PNG', 15, y + 10, 180, 80);
+  const exportPDF = async () => {
+    const element = document.getElementById('vity-report-content');
+    if (!element) {
+      alert("Không tìm thấy nội dung báo cáo!");
+      return;
     }
 
-    doc.save(`VitySolar_TinhToan_${province.ten}.pdf`);
+    setIsAiLoading(true);
+    try {
+      // Give a tiny bit of time for any pending renders
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: true, // Enable logging for debugging
+        width: element.offsetWidth,
+        height: element.offsetHeight
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      // Calculate dimensions to fit A4
+      const imgProps = pdf.getImageProperties(imgData);
+      const imgWidth = pdfWidth - 20; // 10mm margin each side
+      const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+      
+      let heightLeft = imgHeight;
+      let position = 10; // 10mm top margin
+
+      pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+      heightLeft -= (pdfHeight - 20);
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight + 10;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+        heightLeft -= (pdfHeight - 20);
+      }
+      
+      pdf.save(`VitySolar_BaoCao_${province.ten}.pdf`);
+    } catch (error) {
+      console.error("PDF Export Error:", error);
+      alert("Lỗi xuất PDF: " + (error instanceof Error ? error.message : "Vui lòng thử lại"));
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   const exportImage = async () => {
-    if (calcMainRef.current) {
-      const canvas = await html2canvas(calcMainRef.current, {
+    const element = document.getElementById('vity-report-content');
+    if (!element) {
+      alert("Không tìm thấy nội dung báo cáo!");
+      return;
+    }
+
+    setIsAiLoading(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#fafafa'
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: true
       });
+      
+      const imgData = canvas.toDataURL('image/png');
       const link = document.createElement('a');
-      link.download = `VitySolar_Result_${province.ten}.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.download = `VitySolar_KetQua_${province.ten}.png`;
+      link.href = imgData;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("Image Export Error:", error);
+      alert("Lỗi tải ảnh: " + (error instanceof Error ? error.message : "Vui lòng thử lại"));
+    } finally {
+      setIsAiLoading(false);
     }
+  };
+
+  const handlePrint = () => {
+    // For iframes, window.print() might need to be called on the parent or handled specially
+    // but usually window.print() works if the iframe has focus.
+    window.focus();
+    window.print();
   };
 
   const sendEmail = () => {
@@ -545,9 +623,7 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
         <div className="max-w-6xl mx-auto px-4 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 bg-emerald-600 rounded-xl shadow-lg shadow-emerald-600/20">
-                <Zap className="text-white" size={24} fill="currentColor" />
-              </div>
+              <img src="https://i.ibb.co/XHXjrZn/VITY-SOLAR-LOGO-FN-04.png" alt="Vity Solar" className="h-10 w-auto object-contain" />
               <div className="flex flex-col">
                 <span className="text-xl font-black text-slate-900 tracking-tighter leading-none">VITY SOLAR</span>
                 <span className="text-[10px] font-bold text-emerald-600 tracking-[0.2em] uppercase mt-1">Năng lượng xanh</span>
@@ -558,7 +634,13 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
           <div className="hidden lg:flex bg-slate-100 p-1 rounded-xl border border-slate-200">
             <button onClick={() => setActiveMainTab('calc')} className={`py-2 px-4 rounded-lg text-[11px] font-black transition-all ${activeMainTab === 'calc' ? 'bg-white shadow-md text-emerald-600 border border-emerald-100' : 'text-slate-500 hover:text-slate-700'}`}>CÔNG CỤ TÍNH</button>
             <button onClick={() => setActiveMainTab('news')} className={`py-2 px-4 rounded-lg text-[11px] font-black transition-all ${activeMainTab === 'news' ? 'bg-white shadow-md text-emerald-600 border border-emerald-100' : 'text-slate-500 hover:text-slate-700'}`}>TIN TỨC & HD</button>
-            <button onClick={() => setActiveMainTab('weather')} className={`py-2 px-4 rounded-lg text-[11px] font-black transition-all ${activeMainTab === 'weather' ? 'bg-white shadow-md text-emerald-600 border border-emerald-100' : 'text-slate-500 hover:text-slate-700'}`}>THỜI TIẾT & QUANG NĂNG</button>
+            <button 
+              onClick={() => setActiveMainTab('om-inv')} 
+              className={`py-2 px-4 rounded-lg text-[11px] font-black transition-all flex items-center gap-1 ${activeMainTab === 'om-inv' ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <Layout size={12} /> O&M INVERTER <Zap size={10} className="text-yellow-400 fill-yellow-400" />
+            </button>
+            <button onClick={() => setActiveMainTab('weather')} className={`py-2 px-4 rounded-lg text-[11px] font-black transition-all ${activeMainTab === 'weather' ? 'bg-white shadow-md text-emerald-600 border border-emerald-100' : 'text-slate-500 hover:text-slate-700'}`}>THỜI TIẾT</button>
           </div>
 
           <div className="flex items-center gap-4">
@@ -570,12 +652,25 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
           </div>
         </div>
       </header>
+      
+      {/* Mobile Navigation */}
+      <div className="lg:hidden bg-white border-b border-slate-100 flex p-2 gap-2 overflow-x-auto no-scrollbar sticky top-20 z-40 shadow-sm">
+        <button onClick={() => setActiveMainTab('calc')} className={`flex-shrink-0 py-2 px-4 rounded-lg text-[10px] font-black transition-all ${activeMainTab === 'calc' ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-50 text-slate-500'}`}>CÔNG CỤ TÍNH</button>
+        <button onClick={() => setActiveMainTab('news')} className={`flex-shrink-0 py-2 px-4 rounded-lg text-[10px] font-black transition-all ${activeMainTab === 'news' ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-50 text-slate-500'}`}>TIN TỨC</button>
+        <button 
+          onClick={() => setActiveMainTab('om-inv')} 
+          className={`flex-shrink-0 py-2 px-4 rounded-lg text-[10px] font-black transition-all flex items-center gap-1 ${activeMainTab === 'om-inv' ? 'bg-orange-600 text-white shadow-md' : 'bg-slate-50 text-slate-500'}`}
+        >
+          O&M INVERTER <Zap size={8} className="text-yellow-400 fill-yellow-400" />
+        </button>
+        <button onClick={() => setActiveMainTab('weather')} className={`flex-shrink-0 py-2 px-4 rounded-lg text-[10px] font-black transition-all ${activeMainTab === 'weather' ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-50 text-slate-500'}`}>THỜI TIẾT</button>
+      </div>
 
       {/* Hero */}
-      <section className="bg-gradient-to-br from-neutral-900 via-emerald-950 to-red-950 py-12 px-4 relative overflow-hidden">
+      <section className="bg-hero-gradient py-12 px-4 relative overflow-hidden">
         <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 35px, white 35px, white 70px)' }}></div>
         <div className="max-w-6xl mx-auto relative">
-          <div className="inline-flex items-center gap-2 bg-red-500/15 border border-red-500/30 rounded-full px-3 py-1 text-red-400 text-[10px] font-bold mb-4 animate-pulse">
+          <div className="inline-flex items-center gap-2 bg-red-500-15 border border-red-500-30 rounded-full px-3 py-1 text-red-400 text-[10px] font-bold mb-4 animate-pulse">
             ★ Cập nhật giá điện QĐ 1279/QĐ-BCT — Hiệu lực từ 10/5/2025
           </div>
           <h1 className="text-white font-display text-3xl md:text-5xl font-bold leading-tight mb-4">
@@ -586,7 +681,7 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
           </p>
           <div className="flex flex-wrap gap-2">
             {["63 tỉnh thành", "Tính 2 chiều", "Dân dụng & CN", "Giá điện EVN", "Xuất PDF/Ảnh"].map(tag => (
-              <span key={tag} className="bg-white/5 border border-white/10 rounded-full px-3 py-1 text-neutral-400 text-[11px]">{tag}</span>
+              <span key={tag} className="bg-white-5 border border-white-10 rounded-full px-3 py-1 text-neutral-400 text-[11px]">{tag}</span>
             ))}
           </div>
         </div>
@@ -596,7 +691,7 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
       <main className="max-w-6xl mx-auto p-4 md:p-6">
         {activeMainTab === 'weather' ? (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="card border-2 border-emerald-100 shadow-2xl shadow-emerald-500/5">
+            <div className="card border-2 border-emerald-100 shadow-emerald-500-5">
               <div className="card-head bg-emerald-50 border-b-2 border-emerald-100">
                 <Sun size={18} className="text-emerald-600" />
                 <h3 className="flex-1 font-black text-slate-800 uppercase tracking-wider">Dashboard Thời tiết & Quang năng thời gian thực</h3>
@@ -615,7 +710,7 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Main Weather Info */}
                     <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-3xl p-8 text-white shadow-xl shadow-emerald-500/20 relative overflow-hidden">
+                      <div className="bg-emerald-gradient rounded-3xl p-8 text-white shadow-emerald-500-20 relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-4 opacity-20">
                           {(() => {
                             const code = weather.weather_code;
@@ -660,7 +755,7 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
                     </div>
 
                     {/* Solar Irradiance Info */}
-                    <div className="bg-slate-900 rounded-3xl p-8 text-white flex flex-col justify-between shadow-xl shadow-slate-900/20">
+                    <div className="bg-slate-900 rounded-3xl p-8 text-white flex flex-col justify-between shadow-slate-900-20">
                       <div>
                         <div className="flex items-center gap-2 mb-6">
                           <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center text-white">
@@ -675,18 +770,18 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
                         </div>
 
                         <div className="space-y-4">
-                          <div className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/10">
+                          <div className="flex justify-between items-center p-3 bg-white-5 rounded-xl border border-white-10">
                             <span className="text-xs text-slate-400">Bức xạ trực tiếp</span>
                             <span className="text-sm font-black text-amber-200">{Math.round(weather.direct_radiation)} W/m²</span>
                           </div>
-                          <div className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/10">
+                          <div className="flex justify-between items-center p-3 bg-white-5 rounded-xl border border-white-10">
                             <span className="text-xs text-slate-400">Bức xạ khuếch tán</span>
                             <span className="text-sm font-black text-amber-200">{Math.round(weather.diffuse_radiation)} W/m²</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="mt-8 p-4 bg-amber-500/10 rounded-2xl border border-amber-500/20">
+                      <div className="mt-8 p-4 bg-amber-500-10 rounded-2xl border border-amber-500-20">
                         <p className="text-[10px] text-amber-200 italic leading-relaxed">
                           Dữ liệu bức xạ mặt trời được tính toán dựa trên tọa độ GPS thực tế của bạn, giúp đánh giá hiệu suất tức thời của hệ thống Solar.
                         </p>
@@ -702,7 +797,186 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
                 )}
               </div>
             </div>
-            <button onClick={() => setActiveMainTab('calc')} className="btn btn-green w-full justify-center py-4 text-sm font-black shadow-lg shadow-emerald-500/20">QUAY LẠI CÔNG CỤ TÍNH TOÁN</button>
+            <button onClick={() => setActiveMainTab('calc')} className="btn btn-green w-full justify-center py-4 text-sm font-black shadow-emerald-500-20">QUAY LẠI CÔNG CỤ TÍNH TOÁN</button>
+          </div>
+        ) : activeMainTab === 'om-inv' ? (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-5xl mx-auto">
+            {/* Poster Header */}
+            <div className="bg-slate-900 rounded-3xl p-8 text-white relative overflow-hidden shadow-2xl">
+              <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
+              <div className="relative z-10 text-center">
+                <div className="flex flex-col items-center mb-6">
+                  <div className="flex items-center gap-4 mb-2">
+                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center p-2">
+                       <Zap className="text-slate-900" size={32} fill="currentColor" />
+                    </div>
+                    <div className="text-left">
+                      <div className="text-xl font-black text-amber-400 tracking-tighter">VITY SOLAR</div>
+                      <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest bg-emerald-950 px-2 py-0.5 rounded-full">Huawei Inverter Expert</div>
+                    </div>
+                  </div>
+                </div>
+                <h2 className="text-3xl md:text-5xl font-black mb-2 leading-tight">
+                  HƯỚNG DẪN VẬN HÀNH <span className="text-emerald-400">AN TOÀN</span><br />
+                  BIẾN TẦN (INVERTER)
+                </h2>
+                <div className="text-slate-400 text-xs uppercase tracking-widest font-black">SOLAR INVERTER SAFE OPERATION PROCEDURE · VITY-OM-INV-001 v2.0</div>
+              </div>
+            </div>
+
+            {/* Danger Banner */}
+            <div className="bg-red-600 p-4 rounded-2xl flex flex-wrap items-center justify-center gap-4 shadow-lg border-y-2 border-red-400 animate-pulse">
+              <Zap size={24} className="text-yellow-400 fill-yellow-400" />
+              <div className="text-white font-black text-sm text-center uppercase tracking-wider">
+                CẢNH BÁO: ĐIỆN ÁP DC {'>'} <span className="text-yellow-300">600V</span> — NGUY HIỂM CHẾT NGƯỜI | 
+                CHỜ TỐI THIỂU <span className="text-yellow-300">15 PHÚT</span> MỚI ĐƯỢC THAO TÁC
+              </div>
+              <Zap size={24} className="text-yellow-400 fill-yellow-400" />
+            </div>
+
+            {/* Flow Selection Strip */}
+            <div className="card overflow-hidden border-slate-900">
+               <div className="card-head bg-slate-900 border-none text-white p-6">
+                  <div className="flex flex-wrap items-center gap-4 text-[11px] font-black uppercase tracking-widest w-full text-center sm:text-left">
+                    <span className="text-slate-500">Khởi động:</span>
+                    <span className="bg-red-500/20 text-red-300 px-3 py-1 rounded-full border border-red-500/30">DC OFF ✓</span>
+                    <ChevronRight size={14} className="text-slate-700" />
+                    <span className="text-emerald-400">Đo VAC</span>
+                    <ChevronRight size={14} className="text-slate-700" />
+                    <span className="text-emerald-400">AC ON</span>
+                    <ChevronRight size={14} className="text-slate-700" />
+                    <span className="text-emerald-400">DC SW1 ON</span>
+                    <ChevronRight size={14} className="text-slate-700" />
+                    <span className="text-emerald-400">HÒA LƯỚI ✓</span>
+                  </div>
+               </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Left: POWER ON */}
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white shadow-lg">
+                    <Zap size={24} />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 uppercase">Khởi động hệ thống</h3>
+                </div>
+
+                <div className="space-y-4">
+                  {[
+                    { s: "BƯỚC 1", t: "Kiểm tra TẤT CẢ DC SWITCH ở vị trí OFF", d: "Xác nhận DC SW1 và DC SW2 đều OFF trước khi bắt đầu.", c: "emerald" },
+                    { s: "BƯỚC 2", t: "Đo điện áp lưới tại đầu vào AC", d: "Multimeter thang VAC đo ngõ vào AC inverter (198–242V cho 220V).", c: "emerald" },
+                    { s: "BƯỚC 3", t: "Bật CÔNG TẮC AC lên vị trí ON", d: "Đèn báo AC trên inverter sáng → lưới điện đã cấp đến inverter.", c: "emerald" },
+                    { s: "BƯỚC 4", t: "Bật DC SWITCH 1 → vị trí ON", d: "Chỉ bật DC SW1. Chưa bật SW2 — chờ kiểm tra đèn báo.", c: "emerald" },
+                    { s: "BƯỚC 5", t: "Kiểm tra đèn PV CONNECTION", d: "Đèn xanh ổn định (Steady Green) → Bật DC SWITCH 2 lên ON.", c: "emerald" },
+                    { s: "BƯỚC 6", t: "HÒA LƯỚI & KIỂM TRA", d: "Xác nhận trạng thái GRID: Steady Green và ALARM không đỏ.", c: "emerald" }
+                  ].map((step, i) => (
+                    <div key={i} className="bg-white p-5 rounded-2xl border-2 border-slate-100 shadow-sm flex gap-4 hover:border-emerald-200 transition-colors">
+                      <div className="flex-shrink-0 flex flex-col items-center">
+                        <div className={`w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 font-black text-xs border border-emerald-100`}>
+                          {i + 1}
+                        </div>
+                        {i < 5 && <div className="w-0.5 h-full bg-slate-100 mt-2"></div>}
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-black text-emerald-600 mb-1 uppercase tracking-widest">{step.s}</div>
+                        <div className="text-sm font-black text-slate-800 mb-1">{step.t}</div>
+                        <div className="text-[11px] text-slate-500 leading-relaxed">{step.d}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Right: SHUTDOWN */}
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center text-white shadow-lg">
+                    <X size={24} />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 uppercase">Tắt máy & Bảo trì</h3>
+                </div>
+
+                <div className="space-y-4">
+                  {[
+                    { s: "BƯỚC 1", t: "Gửi lệnh tắt qua App / SmartLogger", d: "Dùng phần mềm chuyển Inverter sang trạng thái Stand-by/Stop.", c: "orange" },
+                    { s: "BƯỚC 2", t: "Tắt CÔNG TẮC AC → vị trí OFF", d: "Thực hiện sau khi inverter đã ngừng phát điện để tránh hồ quang.", c: "orange" },
+                    { s: "BƯỚC 3", t: "Đặt DC SW2 về OFF → rồi DC SW1 về OFF", d: "Xoay công tắc dứt khoát về vị trí O (OFF).", c: "orange" },
+                    { s: "BƯỚC 4", t: "Đo dòng DC từng string = 0A", d: "Kiểm tra bằng kìm đo dòng DC, kết quả phải = 0A.", c: "orange" },
+                    { s: "BƯỚC 5", t: "Kiểm tra điện áp dư AC = 0V", d: "Xác nhận an toàn trước khi thao tác bên trong khoang đấu nối.", c: "orange" },
+                    { s: "BƯỚC 6", t: "CHỜ TỐI THIỂU 15 PHÚT", d: "QUAN TRỌNG: Linh kiện bên trong vẫn tích điện áp cao.", c: "red" }
+                  ].map((step, i) => (
+                    <div key={i} className={`p-5 rounded-2xl border-2 shadow-sm flex gap-4 transition-colors ${step.c === 'red' ? 'bg-red-50 border-red-100 animate-pulse' : 'bg-white border-slate-100 hover:border-orange-200'}`}>
+                      <div className="flex-shrink-0 flex flex-col items-center">
+                        <div className={`w-10 h-10 rounded-full bg-${step.c === 'red' ? 'red-50' : 'orange-50'} flex items-center justify-center text-${step.c}-600 font-black text-xs border border-${step.c === 'red' ? 'red-100' : 'orange-100'}`}>
+                          {i + 1}
+                        </div>
+                        {i < 5 && <div className="w-0.5 h-full bg-slate-100 mt-2"></div>}
+                      </div>
+                      <div>
+                        <div className={`text-[10px] font-black text-${step.c}-600 mb-1 uppercase tracking-widest`}>{step.s}</div>
+                        <div className="text-sm font-black text-slate-800 mb-1">{step.t}</div>
+                        <div className="text-[11px] text-slate-500 leading-relaxed">{step.d}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* DC States */}
+            <div className="p-8 bg-slate-100 rounded-3xl border-2 border-slate-200 text-center sm:text-left">
+              <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-6 flex items-center justify-center sm:justify-start gap-2">
+                <Layout size={18} className="text-slate-600" /> Trạng thái DC Switch & Cách nhận biết
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white p-6 rounded-2xl shadow-sm border-t-4 border-emerald-500">
+                   <div className="text-3xl font-black text-emerald-600 mb-2 uppercase">ON</div>
+                   <div className="text-sm font-black text-slate-800 mb-1">Đóng hoàn toàn</div>
+                   <div className="text-[11px] text-slate-500">Vận hành bình thường, phát điện ổn định.</div>
+                </div>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border-t-4 border-red-500">
+                   <div className="text-3xl font-black text-red-600 mb-2 uppercase">OFF</div>
+                   <div className="text-sm font-black text-slate-800 mb-1">Mở an toàn</div>
+                   <div className="text-[11px] text-slate-500">Cắt DC, sẵn sàng bảo trì sau khi xả tụ (15p).</div>
+                </div>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border-t-4 border-orange-500 bg-orange-50">
+                   <div className="text-3xl font-black text-orange-600 mb-2 uppercase italic text-center">TRIP</div>
+                   <div className="text-sm font-black text-slate-800 mb-1">NGUY HIỂM — Kẹt giữa</div>
+                   <div className="text-[11px] text-slate-500 font-medium text-orange-800">Không bật lại! Liên hệ kỹ thuật xử lý lỗi gốc.</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[
+                { i: <MapPin />, t: "Nối đất (PE)", d: "Đấu PE trước tiên, tháo cuối cùng. Trở kháng ≤ 4Ω. Không dùng N làm PE.", c: "amber" },
+                { i: <Info />, t: "Không tháo Connector khi có tải", d: "Không tháo MC4 khi đang hòa lưới → nguy cơ hồ quang điện.", c: "red" },
+                { i: <Layout />, t: "DC Switch tự ngắt", d: "Tuyệt đối không bật lại nếu TRIP cho đến khi xử lý nguyên nhân.", c: "orange" },
+                { i: <CheckCircle2 />, t: "Bảo hộ (PPE)", d: "Găng cách điện, kính, giày cách điện, mũ. Không làm khi mưa.", c: "blue" },
+                { i: <Phone />, t: "Hỗ trợ 24/7", d: "Gọi 0766.39.6699 nếu inverter báo động hoặc switch tự ngắt.", c: "emerald" }
+              ].map((item, i) => (
+                <div key={i} className={`bg-white p-6 rounded-2xl border-l-4 border-${item.c}-500 shadow-sm hover:translate-y-[-4px] transition-all`}>
+                  <div className={`text-${item.c}-500 mb-4`}>{item.i}</div>
+                  <div className="text-sm font-black text-slate-800 mb-2 uppercase tracking-wide">{item.t}</div>
+                  <div className="text-[11px] text-slate-500 leading-relaxed font-medium">{item.d}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-amber-50 p-8 rounded-3xl border-2 border-amber-200 flex flex-col md:flex-row gap-6 items-center">
+              <div className="w-16 h-16 bg-amber-500 rounded-2xl flex items-center justify-center text-white flex-shrink-0 animate-bounce shadow-lg">
+                <Zap size={32} />
+              </div>
+              <div>
+                <h4 className="text-sm font-black text-amber-900 uppercase tracking-widest mb-2 text-center md:text-left">Lưu ý đặc biệt — String Reverse / Backfeed</h4>
+                <p className="text-[12px] text-amber-800 leading-relaxed text-center md:text-left">
+                  Lỗi "String Reverse Connection" hoặc "String Current Backfeed" và DC switch TRIP: Sau khi sửa lỗi vật lý, hãy chờ <strong>3 phút</strong> trước khi reset DC switch về vị trí OFF rồi mới bật lại ON.
+                </p>
+              </div>
+            </div>
+
+            <button onClick={() => setActiveMainTab('calc')} className="btn btn-green w-full justify-center py-4 text-sm font-black shadow-emerald-500-20">QUAY LẠI CÔNG CỤ TÍNH TOÁN</button>
           </div>
         ) : activeMainTab === 'news' ? (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -733,7 +1007,7 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
                         { t: "Giá pin lưu trữ giảm mạnh, cơ hội cho hộ gia đình", s: "Tuổi Trẻ", l: "https://tuoitre.vn/" },
                       ].map((n, i) => (
                         <li key={i} className="group border-b border-slate-50 pb-3 last:border-0">
-                          <a href={n.l} target="_blank" className="flex flex-col hover:bg-emerald-50/50 p-2 rounded-lg transition-all">
+                          <a href={n.l} target="_blank" className="flex flex-col hover:bg-emerald-50-50 p-2 rounded-lg transition-all">
                             <span className="text-[13px] font-black text-slate-800 group-hover:text-emerald-600">{n.t}</span>
                             <span className="text-[10px] text-slate-400 mt-1">Nguồn: {n.s}</span>
                           </a>
@@ -752,7 +1026,7 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
                         { t: "Khắc phục các lỗi thường gặp ở Inverter hòa lưới", s: "Kỹ thuật Solar", l: "#" },
                       ].map((n, i) => (
                         <li key={i} className="group border-b border-slate-50 pb-3 last:border-0">
-                          <a href={n.l} target="_blank" className="flex flex-col hover:bg-blue-50/50 p-2 rounded-lg transition-all">
+                          <a href={n.l} target="_blank" className="flex flex-col hover:bg-blue-50-50 p-2 rounded-lg transition-all">
                             <span className="text-[13px] font-black text-slate-800 group-hover:text-blue-600">{n.t}</span>
                             <span className="text-[10px] text-slate-400 mt-1">Nguồn: {n.s}</span>
                           </a>
@@ -794,7 +1068,7 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
                 </div>
               </div>
             </div>
-            <button onClick={() => setActiveMainTab('calc')} className="btn btn-green w-full justify-center py-4 text-sm font-black shadow-lg shadow-emerald-500/20">QUAY LẠI CÔNG CỤ TÍNH TOÁN</button>
+            <button onClick={() => setActiveMainTab('calc')} className="btn btn-green w-full justify-center py-4 text-sm font-black shadow-emerald-500-20">QUAY LẠI CÔNG CỤ TÍNH TOÁN</button>
           </div>
         ) : (
           <>
@@ -803,20 +1077,20 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
           <button onClick={exportPDF} className="btn btn-red"><Download size={18} /> Tải PDF Báo cáo</button>
           <button onClick={exportImage} className="btn btn-blue"><ImageIcon size={18} /> Tải ảnh PNG</button>
           <button onClick={() => setIsEmailModalOpen(true)} className="btn btn-green"><Send size={18} /> Gửi qua Email</button>
-          <button onClick={() => window.print()} className="btn btn-outline"><Printer size={18} /> In trang</button>
+          <button onClick={handlePrint} className="btn btn-outline"><Printer size={18} /> In trang</button>
           <a 
             href="https://ngochieupc.github.io/quytrinhvesinh/" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="btn bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700"
+            className="btn bg-amber-gradient text-white"
           >
             <Settings size={18} /> O&M Solar
           </a>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="vity-report-content">
           {/* Left Column - Inputs */}
-          <div className="lg:col-span-2 space-y-6" ref={calcMainRef}>
+          <div className="lg:col-span-2 space-y-6">
             
             {/* Location & Customer */}
             <div className="card">
@@ -865,7 +1139,7 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
                     <div className="relative">
                       <input 
                         type="text" 
-                        className="pr-10 border-orange-200 focus:border-orange-500 focus:ring-orange-500/10 text-slate-900 font-medium" 
+                        className="pr-10 border-orange-200 focus:border-orange-500 ring-orange-500-10 text-slate-900 font-medium" 
                         placeholder="Ví dụ: 2.000.000"
                         value={formatVN(monthlyBill)}
                         onChange={e => handleMonthlyBillChange(parseVN(e.target.value))}
@@ -878,7 +1152,7 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
                     <div className="relative">
                       <input 
                         type="text" 
-                        className="pr-10 border-blue-200 focus:border-blue-500 focus:ring-blue-500/10 text-slate-900 font-medium" 
+                        className="pr-10 border-blue-200 focus:border-blue-500 ring-blue-500-10 text-slate-900 font-medium" 
                         placeholder="Ví dụ: 500"
                         value={formatVN(monthlyKwh)}
                         onChange={e => handleMonthlyKwhChange(parseVN(e.target.value))}
@@ -1047,6 +1321,120 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
               </div>
             </div>
 
+            {/* Battery Storage System - NEW SECTION */}
+            <div className="card border-l-4 border-l-purple-500">
+              <div className="card-head">
+                <div className="flex items-center gap-2 flex-1">
+                  <Zap size={16} className="text-purple-600" />
+                  <h3>Hệ thống Lưu trữ (BESS)</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase cursor-pointer" htmlFor="battery-toggle">Sử dụng</label>
+                  <button 
+                    id="battery-toggle"
+                    onClick={() => setHasBattery(!hasBattery)}
+                    className={`w-10 h-5 rounded-full transition-colors relative ${hasBattery ? 'bg-purple-600' : 'bg-slate-300'}`}
+                  >
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${hasBattery ? 'translate-x-5' : 'translate-x-1'}`}></div>
+                  </button>
+                </div>
+              </div>
+              <div className={`card-body transition-all duration-300 ${hasBattery ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div className="fg">
+                      <label className="text-purple-800 font-bold">Dung lượng bộ lưu trữ (kWh)</label>
+                      <input 
+                        type="number" 
+                        min="0" 
+                        step="0.5"
+                        value={batteryCapacity} 
+                        onChange={e => setBatteryCapacity(Number(e.target.value))} 
+                        className="input-focus-ring border-purple-200 focus:border-purple-500"
+                      />
+                    </div>
+                    <div className="fg">
+                      <label>Độ sâu xả (DoD %)</label>
+                      <input 
+                        type="number" 
+                        min="0" 
+                        max="100"
+                        value={batteryDod} 
+                        onChange={e => setBatteryDod(Number(e.target.value))} 
+                      />
+                      <p className="text-[9px] text-slate-400">Deep Cycle Lithium thường ~80-90%</p>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="fg">
+                      <label>Hiệu suất sạc/xả (%)</label>
+                      <input 
+                        type="number" 
+                        min="0" 
+                        max="100"
+                        value={batteryEfficiency} 
+                        onChange={e => setBatteryEfficiency(Number(e.target.value))} 
+                      />
+                    </div>
+                    <div className="fg">
+                      <label>Chi phí lưu trữ (Triệu VNĐ/kWh)</label>
+                      <input 
+                        type="number" 
+                        min="0" 
+                        step="0.1"
+                        value={batteryCostPerKwh} 
+                        onChange={e => setBatteryCostPerKwh(Number(e.target.value))} 
+                      />
+                    </div>
+                    <div className="fg">
+                      <label>Tốc độ xả (C-Rate)</label>
+                      <select value={batteryCRate} onChange={e => setBatteryCRate(Number(e.target.value))}>
+                        <option value={0.2}>0.2C (Tiết kiệm Pin)</option>
+                        <option value={0.5}>0.5C (Tiêu chuẩn)</option>
+                        <option value={1.0}>1.0C (Xả nhanh)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 p-4 bg-purple-50 rounded-2xl border border-purple-100">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Info size={16} className="text-purple-600" />
+                    <h4 className="text-xs font-bold text-purple-900 uppercase tracking-wider">Cấu hình sử dụng</h4>
+                  </div>
+                  <div className="fg">
+                    <label className="text-[11px] text-slate-600 font-bold">Tỷ lệ điện tiêu thụ ban đêm (%)</label>
+                    <div className="flex items-center gap-4">
+                      <input 
+                        type="range" 
+                        min="0" 
+                        max="100" 
+                        value={nightConsumption} 
+                        onChange={e => setNightConsumption(Number(e.target.value))}
+                        className="flex-1 h-1.5 bg-purple-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                      />
+                      <span className="text-sm font-black text-purple-900 w-10">{nightConsumption}%</span>
+                    </div>
+                    <p className="text-[9px] text-slate-500 italic mt-1">Lượng điện mặt trời nạp vào pin để dùng khi trời tối.</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+                    <div className="bg-white p-3 rounded-xl border border-purple-100 shadow-sm">
+                      <div className="text-[10px] text-slate-400 font-bold uppercase mb-1">Dung lượng thực tế</div>
+                      <div className="text-lg font-black text-purple-700">{(results.usableBatteryCapacity || 0).toFixed(1)} kWh</div>
+                    </div>
+                    <div className="bg-white p-3 rounded-xl border border-purple-100 shadow-sm">
+                      <div className="text-[10px] text-slate-400 font-bold uppercase mb-1">Công suất sạc/xả Max</div>
+                      <div className="text-lg font-black text-purple-700">{(results.batteryMaxPower || 0).toFixed(1)} kW</div>
+                    </div>
+                    <div className="bg-white p-3 rounded-xl border border-purple-100 shadow-sm">
+                      <div className="text-[10px] text-slate-400 font-bold uppercase mb-1">Vốn đầu tư Pin</div>
+                      <div className="text-lg font-black text-purple-700">{formatVN(results.totalBatteryCost || 0)} đ</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Results */}
             <div className="card border-emerald-200">
               <div className="card-head bg-emerald-50">
@@ -1123,12 +1511,20 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
                     <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
                       <table className="hv-table">
                         <tbody>
-                          <tr><td>Chi phí đầu tư</td><td>{(investment * 1e6).toLocaleString()} đ</td></tr>
-                          <tr><td>Doanh thu điện năm 1</td><td>{Math.round(results.tienNam).toLocaleString()} đ/năm</td></tr>
+                          <tr><td>Vốn đầu tư thiết bị Solar</td><td>{(investment * 1e6).toLocaleString()} đ</td></tr>
+                          {hasBattery && (
+                            <tr><td>Vốn đầu tư Pin lưu trữ</td><td className="text-purple-700 font-bold">{results.totalBatteryCost.toLocaleString()} đ</td></tr>
+                          )}
+                          <tr className="border-t-2 border-emerald-200">
+                            <td className="font-black text-emerald-900 uppercase text-[10px]">Tổng mức đầu tư</td>
+                            <td className="text-right font-black text-red-600">
+                              {((investment * 1e6) + results.totalBatteryCost).toLocaleString()} đ
+                            </td>
+                          </tr>
+                          <tr><td>Tiết kiệm dự kiến năm 1</td><td>{Math.round(results.tienNam).toLocaleString()} đ/năm</td></tr>
                           <tr><td>Thời gian hoàn vốn</td><td>{results.payback.toFixed(1)} năm</td></tr>
-                          <tr><td>Tổng doanh thu 25 năm</td><td>{Math.round(results.total25).toLocaleString()} đ</td></tr>
-                          <tr><td>Lợi nhuận ròng 25 năm</td><td>{Math.round(results.total25 - investment * 1e6).toLocaleString()} đ</td></tr>
-                          <tr><td><span className="font-bold">IRR đơn giản</span></td><td>{results.irr.toFixed(1)}%/năm</td></tr>
+                          <tr><td>Lợi nhuận ròng 25 năm</td><td>{Math.round(results.total25 - ((investment * 1e6) + results.totalBatteryCost)).toLocaleString()} đ</td></tr>
+                          <tr><td><span className="font-bold text-emerald-700">IRR (Lợi suất dự kiến)</span></td><td className="font-black text-emerald-700">{results.irr.toFixed(1)}%/năm</td></tr>
                         </tbody>
                       </table>
                     </div>
@@ -1160,8 +1556,8 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
           <div className="space-y-6">
             {/* Weather & Solar Irradiance (Mini View) */}
             {weather && (
-              <div className="card overflow-hidden border-2 border-emerald-100 shadow-lg bg-gradient-to-br from-white to-emerald-50/30 cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => setActiveMainTab('weather')}>
-                <div className="card-head bg-emerald-50/50 border-b border-emerald-100">
+              <div className="card overflow-hidden border-2 border-emerald-100 shadow-lg bg-weather-card-gradient cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => setActiveMainTab('weather')}>
+                <div className="card-head bg-emerald-50-50 border-b border-emerald-100">
                   <Sun size={16} className="text-emerald-600" />
                   <h3 className="text-emerald-900 font-black text-[11px] uppercase tracking-wider">Quang năng hiện tại</h3>
                   <div className="ml-auto flex items-center gap-1">
@@ -1325,7 +1721,7 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
                   </table>
                 )}
 
-                <div className="fg mt-4 p-4 bg-emerald-50/50 rounded-2xl border-2 border-emerald-100 shadow-inner">
+                <div className="fg mt-4 p-4 bg-emerald-50-50 rounded-2xl border-2 border-emerald-100 shadow-inner">
                   <label className="text-emerald-800 font-black uppercase text-[10px] tracking-wider">Giá điện tính toán (đ/kWh)</label>
                   <div className="relative flex items-center">
                     <input 
@@ -1377,7 +1773,7 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
             </div>
 
             {/* About Vity Solar */}
-            <div className="card bg-neutral-900 border-emerald-900/30 shadow-2xl shadow-emerald-900/10">
+            <div className="card bg-neutral-900 border-emerald-900-10 shadow-emerald-900-10">
               <div className="card-body">
                 <div className="flex items-center gap-2 mb-4">
                 <div className="flex items-center gap-2">
@@ -1393,13 +1789,13 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
                 </p>
                 <div className="space-y-3">
                   <a href="tel:07663966699" className="flex items-center gap-3 text-neutral-300 text-xs hover:text-[--vity-green] transition-colors">
-                    <div className="w-6 h-6 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-500"><Phone size={12} /></div> 0766.39.6699
+                    <div className="w-6 h-6 bg-emerald-500-20 rounded-full flex items-center justify-center text-emerald-500"><Phone size={12} /></div> 0766.39.6699
                   </a>
                   <a href="mailto:ngochieupc@gmail.com" className="flex items-center gap-3 text-neutral-300 text-xs hover:text-[--vity-green] transition-colors">
-                    <div className="w-6 h-6 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-500"><Mail size={12} /></div> ngochieupc@gmail.com
+                    <div className="w-6 h-6 bg-emerald-500-20 rounded-full flex items-center justify-center text-emerald-500"><Mail size={12} /></div> ngochieupc@gmail.com
                   </a>
                   <a href="https://vitysolar.vn" target="_blank" className="flex items-center gap-3 text-neutral-300 text-xs hover:text-[--vity-green] transition-colors">
-                    <div className="w-6 h-6 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-500"><Globe size={12} /></div> vitysolar.vn
+                    <div className="w-6 h-6 bg-emerald-500-20 rounded-full flex items-center justify-center text-emerald-500"><Globe size={12} /></div> vitysolar.vn
                   </a>
                 </div>
               </div>
@@ -1417,7 +1813,7 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
       <footer className="bg-[--gray-900] py-12 px-4 border-t border-neutral-800">
         <div className="max-w-6xl mx-auto text-center">
           <div className="flex flex-col items-center mb-6 opacity-80">
-            <div className="flex items-center justify-center w-12 h-12 bg-emerald-600 rounded-2xl mb-2 shadow-lg shadow-emerald-600/20">
+            <div className="flex items-center justify-center w-12 h-12 bg-emerald-600 rounded-2xl mb-2 shadow-emerald-500-20">
               <Zap className="text-white" size={28} fill="currentColor" />
             </div>
             <span className="text-2xl font-black text-emerald-600 tracking-tighter">VITY SOLAR</span>
@@ -1475,7 +1871,7 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
           <div className="ai-chat-window animate-in zoom-in-50 duration-300">
             <div className="ai-chat-header">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 bg-white-20 rounded-lg flex items-center justify-center">
                   <Zap size={18} />
                 </div>
                 <div>
@@ -1483,7 +1879,7 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
                   <div className="text-[9px] opacity-80">Vity Solar Expert</div>
                 </div>
               </div>
-              <button onClick={() => setIsChatOpen(false)} className="hover:bg-white/20 p-1 rounded-lg transition-colors">
+              <button onClick={() => setIsChatOpen(false)} className="hover:bg-white-20 p-1 rounded-lg transition-colors">
                 <X size={20} />
               </button>
             </div>
@@ -1544,7 +1940,7 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
 
       {/* Email Modal */}
       {isEmailModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black-60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
