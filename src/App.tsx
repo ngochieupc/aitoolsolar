@@ -3,7 +3,7 @@ import {
   Phone, Mail, Globe, Info, Download, Image as ImageIcon, 
   Send, Printer, MapPin, Layout, Zap, Settings, TrendingUp, 
   BarChart3, CheckCircle2, X, Cloud, Sun, CloudRain, Wind,
-  MessageCircle, ChevronRight, ChevronLeft
+  MessageCircle, ChevronRight, ChevronLeft, Calculator
 } from 'lucide-react';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Title, Tooltip, Legend, BarController, LineController } from 'chart.js';
 import { Chart } from 'react-chartjs-2';
@@ -640,6 +640,14 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
             >
               <Layout size={12} /> O&M INVERTER <Zap size={10} className="text-yellow-400 fill-yellow-400" />
             </button>
+            <a 
+              href="https://cisolar.vercel.app/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="py-2 px-4 rounded-lg text-[11px] font-black transition-all flex items-center gap-1 text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+            >
+              <Calculator size={12} /> TÍNH TOÁN ĐIỆN
+            </a>
             <button onClick={() => setActiveMainTab('weather')} className={`py-2 px-4 rounded-lg text-[11px] font-black transition-all ${activeMainTab === 'weather' ? 'bg-white shadow-md text-emerald-600 border border-emerald-100' : 'text-slate-500 hover:text-slate-700'}`}>THỜI TIẾT</button>
           </div>
 
@@ -663,6 +671,14 @@ VITY SOLAR | ĐT: 0766.39.6699 | vitysolar.vn
         >
           O&M INVERTER <Zap size={8} className="text-yellow-400 fill-yellow-400" />
         </button>
+        <a 
+          href="https://cisolar.vercel.app/" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="flex-shrink-0 py-2 px-4 rounded-lg text-[10px] font-black transition-all flex items-center gap-1 bg-slate-50 text-slate-500 hover:text-slate-700"
+        >
+          <Calculator size={10} /> TÍNH TOÁN ĐIỆN
+        </a>
         <button onClick={() => setActiveMainTab('weather')} className={`flex-shrink-0 py-2 px-4 rounded-lg text-[10px] font-black transition-all ${activeMainTab === 'weather' ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-50 text-slate-500'}`}>THỜI TIẾT</button>
       </div>
 
