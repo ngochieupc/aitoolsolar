@@ -92,7 +92,20 @@ export const PIN_DB: Record<string, Panel[]> = {
     {model:"Hi-MO 6 LR5-54HTH-420M",wp:420,dai:1722,rong:1134,eff:21.3,tc:-0.34},
     {model:"Hi-MO 6 LR5-66HTH-500M",wp:500,dai:2094,rong:1134,eff:21.1,tc:-0.34},
     {model:"Hi-MO X6 LR5-72HGT-580M",wp:580,dai:2278,rong:1134,eff:22.6,tc:-0.29},
-    {model:"Hi-MO X6 Explorer LR5-72HTH-600M",wp:600,dai:2384,rong:1303,eff:22.2,tc:-0.29}
+    {model:"Hi-MO X6 Explorer LR5-72HTH-600M",wp:600,dai:2384,rong:1303,eff:22.2,tc:-0.29},
+    {model:"Hi-MO X10 LR7-72HVHF-640M (Anti-Dust)",wp:640,dai:2382,rong:1134,eff:23.7,tc:-0.26},
+    {model:"Hi-MO X10 LR7-72HVHF-645M (Anti-Dust)",wp:645,dai:2382,rong:1134,eff:23.9,tc:-0.26},
+    {model:"Hi-MO X10 LR7-72HVHF-650M (Anti-Dust)",wp:650,dai:2382,rong:1134,eff:24.1,tc:-0.26},
+    {model:"Hi-MO X10 LR7-72HVHF-655M (Anti-Dust)",wp:655,dai:2382,rong:1134,eff:24.2,tc:-0.26},
+    {model:"Hi-MO X10 LR7-72HVHF-660M (Anti-Dust)",wp:660,dai:2382,rong:1134,eff:24.4,tc:-0.26},
+    {model:"Hi-MO X10 LR7-72HVHF-665M (Anti-Dust)",wp:665,dai:2382,rong:1134,eff:24.6,tc:-0.26},
+    {model:"Hi-MO X10 LR7-72HVHF-670M (Anti-Dust)",wp:670,dai:2382,rong:1134,eff:24.8,tc:-0.26},
+    {model:"Hi-MO X10 LR7-60HVHL-535M (Light Design)",wp:535,dai:1990,rong:1134,eff:23.7,tc:-0.26},
+    {model:"Hi-MO X10 LR7-60HVHL-540M (Light Design)",wp:540,dai:1990,rong:1134,eff:23.9,tc:-0.26},
+    {model:"Hi-MO X10 LR7-60HVHL-545M (Light Design)",wp:545,dai:1990,rong:1134,eff:24.2,tc:-0.26},
+    {model:"Hi-MO X10 LR7-60HVHL-550M (Light Design)",wp:550,dai:1990,rong:1134,eff:24.4,tc:-0.26},
+    {model:"Hi-MO X10 LR7-60HVHL-555M (Light Design)",wp:555,dai:1990,rong:1134,eff:24.6,tc:-0.26},
+    {model:"Hi-MO X10 LR7-60HVHL-560M (Light Design)",wp:560,dai:1990,rong:1134,eff:24.8,tc:-0.26}
   ],
   trina:[
     {model:"TSM-DE09R.05 400W",wp:400,dai:1903,rong:1134,eff:20.8,tc:-0.35},
@@ -107,7 +120,19 @@ export const PIN_DB: Record<string, Panel[]> = {
   ja:[
     {model:"JAM54S30-405/MR",wp:405,dai:1722,rong:1134,eff:20.8,tc:-0.35},
     {model:"JAM72S30-545/MR",wp:545,dai:2256,rong:1133,eff:21.2,tc:-0.35},
-    {model:"JAM72D40-580/LB",wp:580,dai:2278,rong:1134,eff:22.4,tc:-0.29}
+    {model:"JAM72D40-580/LB",wp:580,dai:2278,rong:1134,eff:22.4,tc:-0.29},
+    {model:"JAM72D42-625/LB (Double Glass)",wp:625,dai:2465,rong:1134,eff:22.4,tc:-0.29},
+    {model:"JAM72D42-630/LB (Double Glass)",wp:630,dai:2465,rong:1134,eff:22.5,tc:-0.29},
+    {model:"JAM72D42-635/LB (Double Glass)",wp:635,dai:2465,rong:1134,eff:22.7,tc:-0.29},
+    {model:"JAM72D42-640/LB (Double Glass)",wp:640,dai:2465,rong:1134,eff:22.9,tc:-0.29},
+    {model:"JAM72D42-645/LB (Double Glass)",wp:645,dai:2465,rong:1134,eff:23.1,tc:-0.29},
+    {model:"JAM72D42-650/LB (Double Glass)",wp:650,dai:2465,rong:1134,eff:23.3,tc:-0.29},
+    {model:"JAM66D45-605/LB (Double Glass)",wp:605,dai:2382,rong:1134,eff:22.4,tc:-0.29},
+    {model:"JAM66D45-610/LB (Double Glass)",wp:610,dai:2382,rong:1134,eff:22.6,tc:-0.29},
+    {model:"JAM66D45-615/LB (Double Glass)",wp:615,dai:2382,rong:1134,eff:22.8,tc:-0.29},
+    {model:"JAM66D45-620/LB (Double Glass)",wp:620,dai:2382,rong:1134,eff:23.0,tc:-0.29},
+    {model:"JAM66D45-625/LB (Double Glass)",wp:625,dai:2382,rong:1134,eff:23.1,tc:-0.29},
+    {model:"JAM66D45-630/LB (Double Glass)",wp:630,dai:2382,rong:1134,eff:23.3,tc:-0.29}
   ],
   risen:[
     {model:"RSM40-8-400M",wp:400,dai:1903,rong:950,eff:22.1,tc:-0.34},
@@ -137,6 +162,8 @@ export const INV_DB: Record<string, Inverter[]> = {
     {model:"SUN2000-5KTL-L1",kw:5,eff:98.6},{model:"SUN2000-10KTL-M1",kw:10,eff:98.7},
     {model:"SUN2000-20KTL-M2",kw:20,eff:98.8},{model:"SUN2000-36KTL-M3",kw:36,eff:98.9},
     {model:"SUN2000-50KTL-M3",kw:50,eff:98.9},{model:"SUN2000-100KTL-M1",kw:100,eff:99.0},
+    {model:"SUN2000-100KTL-M2",kw:100,eff:98.8},
+    {model:"SUN2000-150K-MG0",kw:150,eff:98.8},
     {model:"SUN2000-200KTL-H1",kw:200,eff:99.0}
   ],
   sungrow:[
