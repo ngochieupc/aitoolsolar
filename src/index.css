@@ -127,7 +127,7 @@
   --green: #059669;
   --green-mid: #047857;
   --green-light: #ecfdf5;
-  --vity-green: #10b981;
+  --brand-green: #10b981;
   --gold: #f9a825;
   --gold-light: #fff8e1;
   --blue: #1565c0;
@@ -179,7 +179,7 @@ body {
 }
 
 .fg input:focus, .fg select:focus, .fg textarea:focus {
-  @apply border-[--vity-green] ring-4 ring-[--vity-green]/10 shadow-md;
+  @apply border-[--brand-green] ring-4 ring-[--brand-green]/10 shadow-md;
 }
 
 .editable-calc {
